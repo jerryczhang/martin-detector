@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[18]:
+# In[1]:
 
 
 import torch
@@ -15,16 +15,16 @@ import os
 import pandas as pd
 from PIL import Image
 
-criterion = nn.CrossEntropyLoss()
+criterion = nn.BCEWithLogitsLoss()
 batch_size = 50
 shuffle_dataset = True
 random_seed = 42
-num_workers = 1
+num_workers = 3
 validation_split = 0.2
 input_size = 224
 
 
-# In[19]:
+# In[2]:
 
 
 class TransferNnet(nn.Module):
@@ -32,7 +32,7 @@ class TransferNnet(nn.Module):
         super(TransferNnet, self).__init__()
         self.main = models.alexnet(pretrained=True).eval()
         self.fc1 = nn.Linear(1000, 10)
-        self.fc2 = nn.Linear(10, 2)
+        self.fc2 = nn.Linear(10, 1)
 
     def forward(self, input):
         x=self.main.forward(input)
@@ -59,7 +59,7 @@ class TransferNnet(nn.Module):
         return num_features
 
 
-# In[22]:
+# In[3]:
 
 
 class loader:
@@ -152,13 +152,13 @@ def train(model, computing_device):
             optimizer.zero_grad()
             images, labels = images.to(computing_device), labels.to(computing_device)
             outputs = model(images)
-
+            labels = labels.reshape((len(labels), 1)).type_as(outputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()    
 
             train_loss = float(loss)
-            num_correct = int(sum(torch.argmax(outputs,dim=1) == labels))
+            num_correct = int(sum(outputs == labels))
             num_examples = len(labels)
 
         train_losses.append(train_loss)
@@ -176,7 +176,8 @@ def train(model, computing_device):
             for minibatch_count, (images, labels) in enumerate(validation_loader, 0):
                 images, labels = images.to(computing_device), labels.to(computing_device)
                 outputs = model(images)
-                num_correct += int(torch.sum(torch.argmax(outputs,dim=1) == labels))
+                labels = labels.reshape((len(labels), 1)).type_as(outputs)
+                num_correct += int(torch.sum(outputs == labels))
                 num_examples += len(labels)
                 val_loss += criterion(outputs, labels).item()
             val_loss /= (minibatch_count + 1)
@@ -216,7 +217,7 @@ def main():
     #evaluate_model(net, model_name, test_loaders(), computing_device)
 
 
-# In[23]:
+# In[4]:
 
 
 if __name__ == '__main__':
