@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -24,21 +21,16 @@ validation_split = 0.2
 input_size = 224
 
 
-# In[2]:
-
-
 class TransferNnet(nn.Module):
     def __init__(self):
         super(TransferNnet, self).__init__()
         self.main = models.alexnet(pretrained=True).eval()
-        self.fc1 = nn.Linear(1000, 10)
-        self.fc2 = nn.Linear(10, 1)
+        self.fc = nn.Linear(1000, 1)
 
     def forward(self, input):
         x=self.main.forward(input)
         x=x.view(-1, self.num_flat_features(x))
-        x=self.fc1(x)
-        return self.fc2(x)
+        return self.fc(x)
     
     def save(self, path):
         torch.save(self.state_dict(), path)
@@ -57,10 +49,6 @@ class TransferNnet(nn.Module):
             num_features *= s
         
         return num_features
-
-
-# In[3]:
-
 
 class loader:
     """Load in the dataset from the csv file."""
@@ -129,6 +117,13 @@ def test_loaders():
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, num_workers=num_workers)
     return test_loader
 
+def sigmoid_output(x, step=True):
+    s = nn.Sigmoid()
+    if step:
+        return torch.round(s(x))
+    else:
+        return s(x)
+
 def train(model, computing_device):
     """Train the model."""
 
@@ -144,7 +139,8 @@ def train(model, computing_device):
     train_loader, validation_loader = train_loaders()
 
     for epoch in range(50):
-        learning_rates = [1e-3 for x in range(20)] + [0.5e-3 for x in range(10)] + [0.25e-3 for x in range(10)] + [0.12e-3 for x in range(10)]
+        # learning_rates = [1e-3 for x in range(20)] + [0.5e-3 for x in range(10)] + [0.25e-3 for x in range(10)] + [0.12e-3 for x in range(10)]
+        learning_rates = [1e-5 for x in range(50)]
         
         optimizer = optim.Adam(model.parameters(), lr=learning_rates[epoch], weight_decay=0.001)
         for (images, labels) in train_loader:
@@ -158,7 +154,7 @@ def train(model, computing_device):
             optimizer.step()    
 
             train_loss = float(loss)
-            num_correct = int(sum(outputs == labels))
+            num_correct = int(sum(sigmoid_output(outputs) == labels))
             num_examples = len(labels)
 
         train_losses.append(train_loss)
@@ -177,9 +173,11 @@ def train(model, computing_device):
                 images, labels = images.to(computing_device), labels.to(computing_device)
                 outputs = model(images)
                 labels = labels.reshape((len(labels), 1)).type_as(outputs)
-                num_correct += int(torch.sum(outputs == labels))
+                
+                num_correct += int(torch.sum(sigmoid_output(outputs) == labels))
                 num_examples += len(labels)
                 val_loss += criterion(outputs, labels).item()
+            
             val_loss /= (minibatch_count + 1)
             print("Validation loss: " + str(val_loss))
             val_accuracies.append(num_correct / num_examples)
@@ -198,6 +196,7 @@ def train(model, computing_device):
            }) 
         training_statistics.to_csv(loc + "/training_statistics.csv")
         """
+        
 def main():
     use_cuda = torch.cuda.is_available()
     if use_cuda:
@@ -216,15 +215,8 @@ def main():
     train(net, computing_device)
     #evaluate_model(net, model_name, test_loaders(), computing_device)
 
-
-# In[4]:
-
-
 if __name__ == '__main__':
     main()
-
-
-# In[ ]:
 
 
 
