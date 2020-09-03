@@ -123,6 +123,30 @@ def sigmoid_output(x, step=True):
         return torch.round(s(x))
     else:
         return s(x)
+    
+def get_padding(image):
+    w, h = image.shape[0:2]
+    max_dim = max([w,h])
+    horz = (max_dim - w) / 2
+    vert = (max_dim - h) / 2
+    l_pad = int(np.ceil(horz))
+    r_pad = int(np.floor(horz))
+    t_pad = int(np.ceil(vert))
+    b_pad = int(np.floor(vert))
+    return (t_pad, r_pad, b_pad, l_pad)
+
+def image_output(model, image):
+    imarray = np.array(image)
+    transform = transforms.Compose([
+        transforms.Pad(get_padding(imarray)),
+        transforms.Resize(input_size),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5)),
+    ])
+    with torch.no_grad():
+        transformed = transform(image).reshape([1, 3, input_size, input_size])
+        output = sigmoid_output(model(transformed), step=False)
+        print(f'Output: {float(output)}')
 
 def train(model, computing_device):
     """Train the model."""
@@ -184,7 +208,7 @@ def train(model, computing_device):
             val_losses.append(val_loss)
 
         # Save statistics
-        # model.module.save(loc + "/epoch" + str(epoch) + ".pth")
+        model.module.save(f'saved_models/test/{epoch}.pth')
         print("Train accuracy: %f, Validation accuracy: %f" % (train_accuracies[epoch], val_accuracies[epoch]))
         print()
         """
@@ -210,10 +234,9 @@ def main():
         print("CUDA NOT supported")
 
     net = model_init(computing_device)
-    #net.module.load("saved_models/%s/epoch49.pth" % model_name)
-    #visualize(net, model_name, [0, 16, 27])
-    train(net, computing_device)
-    #evaluate_model(net, model_name, test_loaders(), computing_device)
+    net.module.load("saved_models/test/24.pth")
+    #train(net, computing_device)
+    #image_output(net, Image.open('martin_test.jpg'))
 
 if __name__ == '__main__':
     main()
