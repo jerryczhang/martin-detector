@@ -234,9 +234,10 @@ def main():
         print("CUDA NOT supported")
 
     net = model_init(computing_device)
-    net.module.load("saved_models/test/24.pth")
+    net.module.load("saved_models/test/10.pth")
     #train(net, computing_device)
-    #image_output(net, Image.open('martin_test.jpg'))
+    image_output(net, Image.open('martin_test.jpg'))
+    image_output(net, Image.open('other_test.jpg'))
 
 if __name__ == '__main__':
     main()
