@@ -24,7 +24,7 @@ input_size = 224
 class TransferNnet(nn.Module):
     def __init__(self):
         super(TransferNnet, self).__init__()
-        self.main = models.alexnet(pretrained=True).eval()
+        self.main = models.resnet18(pretrained=True).eval()
         self.fc = nn.Linear(1000, 1)
 
     def forward(self, input):
@@ -83,7 +83,7 @@ def train_loaders():
     """Get the train and validation loaders."""
     transform = transforms.Compose([
                 transforms.ToTensor(),
-                transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5)),
+                transforms.Normalize((0.485,0.456,0.406),(0.229,0.224,0.225)),
                 ])
     dataset = loader('train.csv', transform=transform)
 
@@ -104,18 +104,6 @@ def train_loaders():
     validation_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
                                                     sampler=valid_sampler, num_workers=num_workers)
     return train_loader, validation_loader
-
-def test_loaders():
-    """Get the test loader."""
-    transform = transforms.Compose([
-                transforms.Resize(input_size), 
-                transforms.CenterCrop(input_size), 
-                transforms.ToTensor(),
-                transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5)),
-                ])
-    test_set = loader(test_dataset,transform=transform)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, num_workers=num_workers)
-    return test_loader
 
 def sigmoid_output(x, step=True):
     s = nn.Sigmoid()
@@ -141,7 +129,7 @@ def image_output(model, image):
         transforms.Pad(get_padding(imarray)),
         transforms.Resize(input_size),
         transforms.ToTensor(),
-        transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5)),
+        transforms.Normalize((0.485,0.456,0.406),(0.229,0.224,0.225)),
     ])
     with torch.no_grad():
         transformed = transform(image).reshape([1, 3, input_size, input_size])
@@ -157,34 +145,37 @@ def train(model, computing_device):
     val_losses = []
     val_accuracies = []
 
-    loc = "saved_models"
-    if not os.path.exists(loc):
-        os.makedirs(loc)
     train_loader, validation_loader = train_loaders()
 
     for epoch in range(50):
-        # learning_rates = [1e-3 for x in range(20)] + [0.5e-3 for x in range(10)] + [0.25e-3 for x in range(10)] + [0.12e-3 for x in range(10)]
-        learning_rates = [1e-5 for x in range(50)]
+        learning_rates = [1e-5 for x in range(20)] + [0.5e-5 for x in range(10)] + [0.25e-5 for x in range(10)] + [0.12e-5 for x in range(10)]
+        
+        train_loss = 0
+        num_correct = 0
+        num_examples = 0
         
         optimizer = optim.Adam(model.parameters(), lr=learning_rates[epoch], weight_decay=0.001)
-        for (images, labels) in train_loader:
+        for minibatch_count, (images, labels) in enumerate(train_loader, 1):
             
-            optimizer.zero_grad()
             images, labels = images.to(computing_device), labels.to(computing_device)
+            
             outputs = model(images)
             labels = labels.reshape((len(labels), 1)).type_as(outputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()    
 
-            train_loss = float(loss)
-            num_correct = int(sum(sigmoid_output(outputs) == labels))
-            num_examples = len(labels)
+            with torch.no_grad():
+                train_loss += float(loss)
+                num_correct += int(sum(sigmoid_output(outputs) == labels))
+                num_examples += len(labels)
+            
+        avg_loss = train_loss / (minibatch_count)
 
-        train_losses.append(train_loss)
+        train_losses.append(avg_loss)
         train_accuracies.append(num_correct / num_examples)
         print("Finished", epoch + 1, "epochs of training (lr = " + str(learning_rates[epoch]) + ")")
-        print("Average training loss: " + str(train_loss))
+        print("Average training loss: " + str(avg_loss))
 
         # Validation
         
@@ -193,7 +184,7 @@ def train(model, computing_device):
         val_loss = 0
         
         with torch.no_grad():
-            for minibatch_count, (images, labels) in enumerate(validation_loader, 0):
+            for minibatch_count, (images, labels) in enumerate(validation_loader, 1):
                 images, labels = images.to(computing_device), labels.to(computing_device)
                 outputs = model(images)
                 labels = labels.reshape((len(labels), 1)).type_as(outputs)
@@ -202,7 +193,7 @@ def train(model, computing_device):
                 num_examples += len(labels)
                 val_loss += criterion(outputs, labels).item()
             
-            val_loss /= (minibatch_count + 1)
+            avg_loss = val_loss / (minibatch_count)
             print("Validation loss: " + str(val_loss))
             val_accuracies.append(num_correct / num_examples)
             val_losses.append(val_loss)
@@ -226,6 +217,7 @@ def main():
     if use_cuda:
         computing_device = torch.device("cuda")
         torch.cuda.set_device(0)
+        torch.cuda.empty_cache()
         print("CUDA is supported")
         print(torch.cuda.device_count())
     else:
@@ -234,10 +226,9 @@ def main():
         print("CUDA NOT supported")
 
     net = model_init(computing_device)
-    net.module.load("saved_models/test/10.pth")
     #train(net, computing_device)
-    image_output(net, Image.open('martin_test.jpg'))
-    image_output(net, Image.open('other_test.jpg'))
+    net.module.load("saved_models/test/23.pth")
+    #image_output(net, Image.open(image))
 
 if __name__ == '__main__':
     main()
