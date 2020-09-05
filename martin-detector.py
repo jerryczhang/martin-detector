@@ -12,7 +12,7 @@ import os
 import pandas as pd
 from PIL import Image
 
-criterion = nn.BCEWithLogitsLoss()
+criterion = nn.CrossEntropyLoss()
 batch_size = 50
 shuffle_dataset = True
 random_seed = 42
@@ -24,8 +24,8 @@ input_size = 224
 class TransferNnet(nn.Module):
     def __init__(self):
         super(TransferNnet, self).__init__()
-        self.main = models.resnet18(pretrained=True).eval()
-        self.fc = nn.Linear(1000, 1)
+        self.main = models.resnet18(pretrained=True).train()
+        self.fc = nn.Linear(1000, 9)
 
     def forward(self, input):
         x=self.main.forward(input)
@@ -82,6 +82,8 @@ def model_init(computing_device):
 def train_loaders():
     """Get the train and validation loaders."""
     transform = transforms.Compose([
+                transforms.RandomRotation(10),
+                transforms.ColorJitter(brightness=0.2),
                 transforms.ToTensor(),
                 transforms.Normalize((0.485,0.456,0.406),(0.229,0.224,0.225)),
                 ])
@@ -105,12 +107,11 @@ def train_loaders():
                                                     sampler=valid_sampler, num_workers=num_workers)
     return train_loader, validation_loader
 
-def sigmoid_output(x, step=True):
-    s = nn.Sigmoid()
-    if step:
-        return torch.round(s(x))
-    else:
-        return s(x)
+def softmax(x, step=True):
+    s = nn.Softmax(dim=1)
+    values, indices = torch.max(s(x), dim=1)
+    print(s(x))
+    return (float(values), float(indices))
     
 def get_padding(image):
     w, h = image.shape[0:2]
@@ -123,18 +124,20 @@ def get_padding(image):
     b_pad = int(np.floor(vert))
     return (t_pad, r_pad, b_pad, l_pad)
 
-def image_output(model, image):
-    imarray = np.array(image)
-    transform = transforms.Compose([
-        transforms.Pad(get_padding(imarray)),
-        transforms.Resize(input_size),
-        transforms.ToTensor(),
-        transforms.Normalize((0.485,0.456,0.406),(0.229,0.224,0.225)),
-    ])
-    with torch.no_grad():
-        transformed = transform(image).reshape([1, 3, input_size, input_size])
-        output = sigmoid_output(model(transformed), step=False)
-        print(f'Output: {float(output)}')
+def image_output(model, images):
+    for image in images:
+        image = Image.open(image)
+        imarray = np.array(image)
+        transform = transforms.Compose([
+            transforms.Pad(get_padding(imarray)),
+            transforms.Resize(input_size),
+            transforms.ToTensor(),
+            transforms.Normalize((0.485,0.456,0.406),(0.229,0.224,0.225)),
+        ])
+        with torch.no_grad():
+            transformed = transform(image).reshape([1, 3, input_size, input_size])
+            output = softmax(model(transformed))
+            print(f'Output: {output}')
 
 def train(model, computing_device):
     """Train the model."""
@@ -154,20 +157,19 @@ def train(model, computing_device):
         num_correct = 0
         num_examples = 0
         
-        optimizer = optim.Adam(model.parameters(), lr=learning_rates[epoch], weight_decay=0.001)
+        optimizer = optim.Adam(model.parameters(), lr=learning_rates[epoch], weight_decay=0.01)
         for minibatch_count, (images, labels) in enumerate(train_loader, 1):
             
             images, labels = images.to(computing_device), labels.to(computing_device)
             
             outputs = model(images)
-            labels = labels.reshape((len(labels), 1)).type_as(outputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()    
 
             with torch.no_grad():
                 train_loss += float(loss)
-                num_correct += int(sum(sigmoid_output(outputs) == labels))
+                num_correct += int(sum(softmax(outputs)[1] == labels))
                 num_examples += len(labels)
             
         avg_loss = train_loss / (minibatch_count)
@@ -187,9 +189,8 @@ def train(model, computing_device):
             for minibatch_count, (images, labels) in enumerate(validation_loader, 1):
                 images, labels = images.to(computing_device), labels.to(computing_device)
                 outputs = model(images)
-                labels = labels.reshape((len(labels), 1)).type_as(outputs)
                 
-                num_correct += int(torch.sum(sigmoid_output(outputs) == labels))
+                num_correct += int(sum(softmax(outputs)[1] == labels))
                 num_examples += len(labels)
                 val_loss += criterion(outputs, labels).item()
             
@@ -227,8 +228,8 @@ def main():
 
     net = model_init(computing_device)
     #train(net, computing_device)
-    net.module.load("saved_models/test/23.pth")
-    #image_output(net, Image.open(image))
+    net.module.load("saved_models/test/44.pth")
+    image_output(net, ['test.jpg', 'test2.jpg', 'test3.jpg', 'test4.jpg', 'test5.jpg', 'test6.jpg'])
 
 if __name__ == '__main__':
     main()
