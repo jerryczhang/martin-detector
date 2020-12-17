@@ -82,8 +82,8 @@ def model_init(computing_device):
 def train_loaders():
     """Get the train and validation loaders."""
     transform = transforms.Compose([
-                transforms.RandomRotation(10),
-                transforms.ColorJitter(brightness=0.2),
+                #transforms.RandomRotation(10),
+                #transforms.ColorJitter(brightness=0.2),
                 transforms.ToTensor(),
                 transforms.Normalize((0.485,0.456,0.406),(0.229,0.224,0.225)),
                 ])
@@ -111,7 +111,7 @@ def softmax(x, step=True):
     s = nn.Softmax(dim=1)
     values, indices = torch.max(s(x), dim=1)
     print(s(x))
-    return (float(values), float(indices))
+    return values, indices
     
 def get_padding(image):
     w, h = image.shape[0:2]
@@ -228,7 +228,7 @@ def main():
 
     net = model_init(computing_device)
     #train(net, computing_device)
-    net.module.load("saved_models/test/44.pth")
+    net.module.load("saved_models/test/8.pth")
     image_output(net, ['test.jpg', 'test2.jpg', 'test3.jpg', 'test4.jpg', 'test5.jpg', 'test6.jpg'])
 
 if __name__ == '__main__':
