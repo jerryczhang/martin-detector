@@ -7,7 +7,7 @@ import numpy as np
 def pull_faces(pil_image, cascade):
     array = np.array(pil_image)
     cv_image = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
-    faces = cascade.detectMultiScale(cv_image, minSize=(224,224))
+    faces = cascade.detectMultiScale(cv_image, minNeighbors=6, scaleFactor=1.1, minSize=(224,224))
     pil_faces = []
     for (x1,y1,w,h) in faces:
         s = max(w,h)
@@ -50,5 +50,5 @@ def autorotate(pil_image):
         return pil_image
 
 cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-get_face_images('images/images', 'images/cropped', cascade)
+get_face_images('images/raw', 'images/faces', cascade)
 
