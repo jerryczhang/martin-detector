@@ -15,6 +15,7 @@ dir_train = 'images/data/train'
 criterion = nn.CrossEntropyLoss()
 batch_size = 50
 validation_split = 0.2
+learning_rate = 1e-5
 
 shuffle_dataset = True
 num_workers = 3
@@ -65,8 +66,7 @@ def train_loaders():
 def softmax(x, step=True):
     s = nn.Softmax(dim=1)
     values, indices = torch.max(s(x), dim=1)
-    print(s(x))
-    return values, indices
+    return [values, indices]
 
 def get_padding(image):
     w, h = image.shape[0:2]
@@ -106,21 +106,24 @@ def train(model, computing_device):
     train_loader, validation_loader = train_loaders()
 
     for epoch in range(50):
-        learning_rates = [1e-5 for x in range(20)] + [0.5e-5 for x in range(10)] + [0.25e-5 for x in range(10)] + [0.12e-5 for x in range(10)]
-        
+
+        # Train
         train_loss = 0
         num_correct = 0
         num_examples = 0
         
-        optimizer = optim.Adam(model.parameters(), lr=learning_rates[epoch], weight_decay=0.01)
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.01)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,'min', patience=2)
         for minibatch_count, item in enumerate(train_loader, 1):
 
-            images, labels = item[0], item[1]
-            images, labels = images.to(computing_device), labels.to(computing_device)
-            
+            images, labels = item[0].to(computing_device), item[1].to(computing_device)
+
             outputs = model(images)
             loss = criterion(outputs, labels)
+
+            optimizer.zero_grad()
             loss.backward()
+            nn.utils.clip_grad_value_(model.parameters(), 0.1)
             optimizer.step()    
 
             with torch.no_grad():
@@ -128,47 +131,37 @@ def train(model, computing_device):
                 num_correct += int(sum(softmax(outputs)[1] == labels))
                 num_examples += len(labels)
             
-        avg_loss = train_loss / (minibatch_count)
+        train_loss /= minibatch_count
 
-        train_losses.append(avg_loss)
+        train_losses.append(train_loss)
         train_accuracies.append(num_correct / num_examples)
-        print("Finished", epoch + 1, "epochs of training (lr = " + str(learning_rates[epoch]) + ")")
-        print("Average training loss: " + str(avg_loss))
+        print(f'Finished {epoch + 1} epochs of training')
+        print(f'Average training loss: {train_loss}')
 
         # Validation
-        
+        val_loss = 0
         num_correct = 0
         num_examples = 0
-        val_loss = 0
-        
+
         with torch.no_grad():
-            for minibatch_count, (images, labels) in enumerate(validation_loader, 1):
-                images, labels = images.to(computing_device), labels.to(computing_device)
+            for minibatch_count, item in enumerate(validation_loader, 1):
+                images, labels = item[0].to(computing_device), item[1].to(computing_device)
                 outputs = model(images)
                 
                 num_correct += int(sum(softmax(outputs)[1] == labels))
                 num_examples += len(labels)
                 val_loss += criterion(outputs, labels).item()
             
-            avg_loss = val_loss / (minibatch_count)
-            print("Validation loss: " + str(val_loss))
+            val_loss /=  minibatch_count
+            print(f'Validation loss: {val_loss}')
             val_accuracies.append(num_correct / num_examples)
             val_losses.append(val_loss)
 
-        # Save statistics
+        scheduler.step(val_loss)
         model.module.save(f'saved_models/test/{epoch}.pth')
-        print("Train accuracy: %f, Validation accuracy: %f" % (train_accuracies[epoch], val_accuracies[epoch]))
+        print(f'Train accuracy: {train_accuracies[epoch]}, Validation accuracy: {val_accuracies[epoch]}')
         print()
-        """
-        training_statistics = pd.DataFrame({
-           "train_losses":train_losses, 
-           "val_losses":val_losses, 
-           "train_accuracies":train_accuracies, 
-           "val_accuracies":val_accuracies,
-           }) 
-        training_statistics.to_csv(loc + "/training_statistics.csv")
-        """
-        
+
 def main():
     use_cuda = torch.cuda.is_available()
     if use_cuda:
@@ -184,8 +177,8 @@ def main():
 
     net = model_init(computing_device)
     train(net, computing_device)
-    #net.module.load("saved_models/test/8.pth")
-    #image_output(net, ['test.jpg', 'test2.jpg', 'test3.jpg', 'test4.jpg', 'test5.jpg', 'test6.jpg'])
+    net.module.load("saved_models/test/15.pth")
+    image_output(net, ['images/data/train/mitchell/0IMG_1807.jpg'])
 
 if __name__ == '__main__':
     main()
