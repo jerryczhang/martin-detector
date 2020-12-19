@@ -1,8 +1,9 @@
 from glob import glob
 import numpy as np
 import os
-from PIL import Image
 from torch.utils.data import Dataset
+
+from utils import *
 
 class ImageDataset(Dataset):
     def __init__(self, img_dir, transform):
@@ -25,9 +26,12 @@ class ImageDataset(Dataset):
 
     def __getitem__(self, i):
         item = self.items[i]
-        pil_image = Image.open(item[0])
+        pil_image = pil_open(item[0])
         image = self.preprocess(pil_image)
         return [image, item[1], item[2]]
 
     def __len__(self):
         return len(self.items)
+
+    def append(self, item):
+        self.items.append([item[0], item[1], item[2]])

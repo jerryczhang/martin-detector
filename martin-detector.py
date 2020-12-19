@@ -6,7 +6,6 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 import numpy as np
 import os
-from PIL import Image
 
 from dataset import ImageDataset
 
@@ -80,16 +79,14 @@ def get_padding(image):
     return (t_pad, r_pad, b_pad, l_pad)
 
 def image_output(model, images):
-    for image in images:
-        image = Image.open(image)
-        imarray = np.array(image)
+    with torch.no_grad():
         transform = transforms.Compose([
             transforms.Pad(get_padding(imarray)),
             transforms.Resize(input_size),
             transforms.ToTensor(),
-            transforms.Normalize((0.485,0.456,0.406),(0.229,0.224,0.225)),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
-        with torch.no_grad():
+        for image in images:
             transformed = transform(image).reshape([1, 3, input_size, input_size])
             output = softmax(model(transformed))
             print(f'Output: {output}')
