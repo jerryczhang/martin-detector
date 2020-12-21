@@ -24,6 +24,11 @@ random_seed = 42
 torch.manual_seed(random_seed)
 np.random.seed(random_seed)
 
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+])
+
 class TransferNnet(nn.Module):
     def __init__(self):
         super(TransferNnet, self).__init__()
@@ -49,10 +54,6 @@ def model_init(computing_device):
 
 def train_loaders():
     """Get the train and validation loaders."""
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-    ])
     dataset = ImageDataset(transform, dir_train)
     n_val = int(len(dataset) * validation_split)
     n_train = len(dataset) - n_val
@@ -68,10 +69,6 @@ def softmax(x, step=True):
 
 def image_output(model, images):
     with torch.no_grad():
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        ])
         dataset = ImageDataset(transform)
         for image in images:
             dataset.append([image, 0, ''])
@@ -164,7 +161,7 @@ def main():
 
     net = model_init(computing_device)
     train(net, computing_device)
-    net.module.load("saved_models/test/15.pth")
+    net.module.load("saved_models/15.pth")
     image_output(net, ['images/data/train/mitchell/0IMG_1807.jpg'])
 
 if __name__ == '__main__':
