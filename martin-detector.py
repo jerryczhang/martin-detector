@@ -17,7 +17,7 @@ validation_split = 0.2
 learning_rate = 1e-5
 
 shuffle_dataset = True
-num_workers = 3
+num_workers = 8
 input_size = 224
 
 random_seed = 42
@@ -45,7 +45,6 @@ def model_init(computing_device):
     """Initialize model."""
     net = TransferNnet()
     net = nn.DataParallel(net).to(computing_device)
-    print(net)
     return net
 
 def train_loaders():
@@ -54,12 +53,12 @@ def train_loaders():
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
     ])
-    dataset = ImageDataset(dir_train, transform)
+    dataset = ImageDataset(transform, dir_train)
     n_val = int(len(dataset) * validation_split)
     n_train = len(dataset) - n_val
     train, val = utils.random_split(dataset, [n_train, n_val])
     train_loader = utils.DataLoader(train, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=num_workers, pin_memory=True)
-    validation_loader = utils.DataLoader(train, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=num_workers, pin_memory=True, drop_last=True)
+    validation_loader = utils.DataLoader(val, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=num_workers, pin_memory=True)
     return train_loader, validation_loader
 
 def softmax(x, step=True):
@@ -67,33 +66,25 @@ def softmax(x, step=True):
     values, indices = torch.max(s(x), dim=1)
     return [values, indices]
 
-def get_padding(image):
-    w, h = image.shape[0:2]
-    max_dim = max([w,h])
-    horz = (max_dim - w) / 2
-    vert = (max_dim - h) / 2
-    l_pad = int(np.ceil(horz))
-    r_pad = int(np.floor(horz))
-    t_pad = int(np.ceil(vert))
-    b_pad = int(np.floor(vert))
-    return (t_pad, r_pad, b_pad, l_pad)
-
 def image_output(model, images):
     with torch.no_grad():
         transform = transforms.Compose([
-            transforms.Pad(get_padding(imarray)),
-            transforms.Resize(input_size),
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
+        dataset = ImageDataset(transform)
         for image in images:
-            transformed = transform(image).reshape([1, 3, input_size, input_size])
-            output = softmax(model(transformed))
-            print(f'Output: {output}')
+            dataset.append([image, 0, ''])
+        loader = utils.DataLoader(dataset, batch_size=1, num_workers=num_workers, pin_memory=True)
+        for item in loader:
+            image = item[0]
+            output = softmax(model(image))
+            print(f'Output: {output[1].item()}')
 
 def train(model, computing_device):
     """Train the model."""
 
+    print('\nStarting training')
     train_losses = []
     train_accuracies = []
 
@@ -132,7 +123,7 @@ def train(model, computing_device):
 
         train_losses.append(train_loss)
         train_accuracies.append(num_correct / num_examples)
-        print(f'Finished {epoch + 1} epochs of training')
+        print(f'\nFinished {epoch + 1} epochs of training')
         print(f'Average training loss: {train_loss}')
 
         # Validation
@@ -148,7 +139,7 @@ def train(model, computing_device):
                 num_correct += int(sum(softmax(outputs)[1] == labels))
                 num_examples += len(labels)
                 val_loss += criterion(outputs, labels).item()
-            
+
             val_loss /=  minibatch_count
             print(f'Validation loss: {val_loss}')
             val_accuracies.append(num_correct / num_examples)
@@ -157,7 +148,6 @@ def train(model, computing_device):
         scheduler.step(val_loss)
         model.module.save(f'saved_models/test/{epoch}.pth')
         print(f'Train accuracy: {train_accuracies[epoch]}, Validation accuracy: {val_accuracies[epoch]}')
-        print()
 
 def main():
     use_cuda = torch.cuda.is_available()
@@ -165,12 +155,12 @@ def main():
         computing_device = torch.device("cuda")
         torch.cuda.set_device(0)
         torch.cuda.empty_cache()
-        print("CUDA is supported")
-        print(torch.cuda.device_count())
     else:
         computing_device = torch.device("cpu")
-        extras = False
-        print("CUDA NOT supported")
+
+    print(f'Batch size: {batch_size}')
+    print(f'Validation split: {validation_split}')
+    print(f'Initial learning rate: {learning_rate}')
 
     net = model_init(computing_device)
     train(net, computing_device)
