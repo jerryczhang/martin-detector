@@ -1,6 +1,7 @@
 from glob import glob
 import numpy as np
 import os
+import torch
 from torch.utils.data import Dataset
 
 from utils import *
@@ -14,15 +15,16 @@ class ImageDataset(Dataset):
         if img_dir == None:
             return
         for i,label in enumerate(os.listdir(img_dir)):
-            subdir = f'{img_dir}/{label}'
-            for image in os.listdir(subdir):
-                self.items.append([f'{subdir}/{image}', i, label])
+            subdir = os.path.join(img_dir, label)
+            for image in glob(os.path.join(subdir, '**', '*'), recursive=True):
+                if os.path.isfile(image):
+                    self.items.append([image, i, label])
+
 
         print(f'Created dataset with {len(self)} examples')
 
     def preprocess(self, pil_image, size=(224,224)):
         pil_image = pil_image.resize(size).convert('RGB')
-        image_array = np.array(pil_image)
         image_array = self.transform(image_array)
         if image_array.max() > 1:
             image_array = image_array / 255

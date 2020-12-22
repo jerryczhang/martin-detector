@@ -12,7 +12,7 @@ from dataset import ImageDataset
 dir_train = 'images/data/train'
 
 criterion = nn.CrossEntropyLoss()
-batch_size = 50
+batch_size = 10
 validation_split = 0.2
 learning_rate = 1e-5
 
@@ -143,11 +143,14 @@ def train(model, computing_device):
             val_losses.append(val_loss)
 
         scheduler.step(val_loss)
-        model.module.save(f'saved_models/test/{epoch}.pth')
+        if not os.path.isdir('saved_models'):
+            os.makedirs('saved_models')
+        model.module.save(os.path.join('saved_models', f'{epoch}.pth'))
         print(f'Train accuracy: {train_accuracies[epoch]}, Validation accuracy: {val_accuracies[epoch]}')
 
 def main():
     use_cuda = torch.cuda.is_available()
+    print(f'Using CUDA: {use_cuda}')
     if use_cuda:
         computing_device = torch.device("cuda")
         torch.cuda.set_device(0)
@@ -161,7 +164,7 @@ def main():
 
     net = model_init(computing_device)
     train(net, computing_device)
-    net.module.load("saved_models/15.pth")
+    net.module.load("saved_models/23.pth")
     image_output(net, ['images/data/train/mitchell/0IMG_1807.jpg'])
 
 if __name__ == '__main__':
