@@ -12,6 +12,7 @@ from dataset import ImageDataset
 dir_train = 'images/data/train'
 
 criterion = nn.CrossEntropyLoss()
+epochs = 50
 batch_size = 10
 validation_split = 0.2
 learning_rate = 1e-5
@@ -90,13 +91,13 @@ def train(model, computing_device):
 
     train_loader, validation_loader = train_loaders()
 
-    for epoch in range(50):
+    for epoch in range(epochs):
 
         # Train
         train_loss = 0
         num_correct = 0
         num_examples = 0
-        
+
         optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.01)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,'min', patience=2)
         for minibatch_count, item in enumerate(train_loader, 1):
@@ -145,7 +146,7 @@ def train(model, computing_device):
         scheduler.step(val_loss)
         if not os.path.isdir('saved_models'):
             os.makedirs('saved_models')
-        model.module.save(os.path.join('saved_models', f'{epoch}.pth'))
+        model.module.save(os.path.join('saved_models', f'{epoch + 1}.pth'))
         print(f'Train accuracy: {train_accuracies[epoch]}, Validation accuracy: {val_accuracies[epoch]}')
 
 def main():
