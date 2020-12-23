@@ -10,10 +10,11 @@ import os
 from dataset import ImageDataset
 
 dir_train = 'images/data/train'
+dir_test = 'images/data/test'
 
 criterion = nn.CrossEntropyLoss()
 epochs = 50
-batch_size = 10
+batch_size = 50
 validation_split = 0.2
 learning_rate = 1e-5
 
@@ -70,6 +71,7 @@ def softmax(x, step=True):
 
 def image_output(model, images):
     with torch.no_grad():
+        model.eval()
         dataset = ImageDataset(transform)
         for image in images:
             dataset.append([image, 0, ''])
@@ -79,10 +81,32 @@ def image_output(model, images):
             output = softmax(model(image))
             print(f'Output: {output[1].item()}')
 
+def test_eval(model, computing_device):
+    print('\nStarting evaluation on test set')
+    model.eval()
+
+    dataset = ImageDataset(transform, dir_test)
+    test_loader = utils.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
+
+    num_correct = 0
+    for item in test_loader:
+        images, labels = item[0].to(computing_device), item[1].to(computing_device)
+
+        outputs = model(images)
+        num_correct += int(sum(softmax(outputs)[1] == labels))
+
+    accuracy = num_correct / len(dataset)
+    print(f'Accuracy on test set: {accuracy * 100}')
+
+
 def train(model, computing_device):
     """Train the model."""
 
     print('\nStarting training')
+    print(f'Batch size: {batch_size}')
+    print(f'Validation split: {validation_split}')
+    print(f'Initial learning rate: {learning_rate}')
+
     train_losses = []
     train_accuracies = []
 
@@ -159,14 +183,11 @@ def main():
     else:
         computing_device = torch.device("cpu")
 
-    print(f'Batch size: {batch_size}')
-    print(f'Validation split: {validation_split}')
-    print(f'Initial learning rate: {learning_rate}')
-
     net = model_init(computing_device)
-    train(net, computing_device)
-    net.module.load("saved_models/23.pth")
-    image_output(net, ['images/data/train/mitchell/0IMG_1807.jpg'])
+    net.module.load("saved_models/50.pth")
+    #train(net, computing_device)
+    #image_output(net, ['images/data/train/mitchell/0IMG_1807.jpg', 'images/data/train/jerry/0IMG_1655.jpg', 'images/data/train/martin/0IMG_1854.jpg'])
+    test_eval(net, computing_device)
 
 if __name__ == '__main__':
     main()

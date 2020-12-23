@@ -25,6 +25,7 @@ class ImageDataset(Dataset):
 
     def preprocess(self, pil_image, size=(224,224)):
         pil_image = pil_image.resize(size).convert('RGB')
+        image_array = np.array(pil_image)
         image_array = self.transform(image_array)
         if image_array.max() > 1:
             image_array = image_array / 255
