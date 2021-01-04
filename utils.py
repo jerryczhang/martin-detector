@@ -17,9 +17,10 @@ def pil_open(image_str):
     ]
     exif = pil_image._getexif()
     if exif:
-        transform = transforms[exif[0x0112]]
+        orientation_tag = 0x0112
+        transform = transforms[exif[orientation_tag]] if (orientation_tag) in exif else []
         for t in transform:
-            pil_image.transpose(method=t)
+            pil_image = pil_image.transpose(method=t)
         return pil_image
     return pil_image
 
