@@ -1,4 +1,6 @@
+import cv2
 from PIL import Image
+import numpy as np
 
 def pil_open(image_str):
     pil_image = Image.open(image_str)
@@ -21,12 +23,11 @@ def pil_open(image_str):
         return pil_image
     return pil_image
 
-def pull_faces(pil_image):
-    pil_image = pil_autorotate(pil_image)
+def pull_faces(pil_image, min_neighbors):
     cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
     array = np.array(pil_image)
     cv_image = cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
-    faces = cascade.detectMultiScale(cv_image, minNeighbors=6, scaleFactor=1.1, minSize=(224,224))
+    faces = cascade.detectMultiScale(cv_image, minNeighbors=min_neighbors, scaleFactor=1.1, minSize=(224,224))
     pil_faces = []
     for (x1,y1,w,h) in faces:
         s = max(w,h)
