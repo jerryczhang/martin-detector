@@ -186,7 +186,6 @@ def main():
     net = model_init(computing_device)
     net.module.load("saved_models/50.pth")
     #train(net, computing_device)
-    #image_output(net, ['images/data/train/mitchell/0IMG_1807.jpg', 'images/data/train/jerry/0IMG_1655.jpg', 'images/data/train/martin/0IMG_1854.jpg'])
     test_eval(net, computing_device)
 
 if __name__ == '__main__':
