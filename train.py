@@ -7,9 +7,9 @@ import torch.utils.data as utils
 import os
 
 from dataset import ImageDataset
+from model import MNet
 
 dir_train = 'images/data/train'
-dir_test = 'images/data/test'
 
 criterion = nn.CrossEntropyLoss()
 epochs = 50
@@ -18,18 +18,17 @@ validation_split = 0.2
 learning_rate = 1e-5
 
 shuffle_dataset = True
-num_workers = 8
 input_size = 224
 
 def train_loaders(transform):
-    """Get the train and validation loaders."""
+    """Get the train and validation loaders"""
 
-    dataset = ImageDataset(transform, dir_train)
+    dataset = ImageDataset(dir_train)
     n_val = int(len(dataset) * validation_split)
     n_train = len(dataset) - n_val
     train, val = utils.random_split(dataset, [n_train, n_val])
-    train_loader = utils.DataLoader(train, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=num_workers, pin_memory=True)
-    validation_loader = utils.DataLoader(val, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=num_workers, pin_memory=True)
+    train_loader = utils.DataLoader(train, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=8, pin_memory=True)
+    validation_loader = utils.DataLoader(val, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=8, pin_memory=True)
     return train_loader, validation_loader
 
 def train_loop(model, device, optimizer, scheduler, train_loader):
@@ -39,6 +38,7 @@ def train_loop(model, device, optimizer, scheduler, train_loader):
     num_correct = 0
     num_examples = 0
 
+    model.train()
     for minibatch, item in enumerate(train_loader, 1):
         images, labels = item[0].to(device), item[1].to(device)
 
@@ -66,6 +66,7 @@ def val_loop(model, device, scheduler, validation_loader):
     num_correct = 0
     num_examples = 0
 
+    model.eval()
     with torch.no_grad():
         for minibatch, item in enumerate(validation_loader, 1):
             images, labels = item[0].to(device), item[1].to(device)
@@ -83,7 +84,7 @@ def val_loop(model, device, scheduler, validation_loader):
 
 
 def train(model, device):
-    """Train the model."""
+    """Train the model"""
 
     print('\nStarting training')
     print(f'Batch size: {batch_size}')
@@ -126,3 +127,16 @@ def train(model, device):
         if not os.path.isdir('saved_models'):
             os.makedirs('saved_models')
         model.module.save(os.path.join('saved_models', f'{epoch + 1}.pth'))
+
+def main():
+    use_cuda = torch.cuda.is_available()
+    assert use_cuda, "CUDA not available"
+    device = torch.device("cuda")
+    torch.cuda.set_device(0)
+
+    net = MNet()
+    net = nn.DataParallel(net).to(device)
+    train(net, device)
+
+if __name__ == '__main__':
+    main()
