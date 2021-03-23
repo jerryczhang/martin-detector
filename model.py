@@ -9,16 +9,13 @@ class MNet(nn.Module):
         self.main = models.resnet18(pretrained=True)
         self.fc = nn.Linear(1000, 9)
 
-    def forward(self, input, output='logits'):
+    def forward(self, input):
         x = self.main.forward(input)
         x = x.view(-1, 1000)
         logits = self.fc(x)
-        if output == 'logits':
-            return logits
-        elif output == 'softmax':
-            return F.softmax(logits, dim=1)
-        elif output == 'argmax':
-            return torch.argmax(F.softmax(logits, dim=1), dim=1)
+        softmax = F.softmax(logits, dim=1)
+        argmax = torch.argmax(softmax, dim=1)
+        return {'logits':logits, 'softmax':softmax, 'argmax':argmax}
 
     def save(self, path):
         torch.save(self.state_dict(), path)

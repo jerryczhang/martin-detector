@@ -13,10 +13,10 @@ from model import MNet
 dir_train = 'images/data/train'
 
 criterion = nn.CrossEntropyLoss()
-epochs = 50
-batch_size = 50
+epochs = 100
+batch_size = 125
 validation_split = 0.2
-learning_rate = 1e-5
+learning_rate = 1e-4
 
 shuffle_dataset = True
 input_size = 224
@@ -28,8 +28,8 @@ def train_loaders():
     n_val = int(len(dataset) * validation_split)
     n_train = len(dataset) - n_val
     train, val = utils.random_split(dataset, [n_train, n_val])
-    train_loader = utils.DataLoader(train, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=8, pin_memory=True)
-    validation_loader = utils.DataLoader(val, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=8, pin_memory=True)
+    train_loader = utils.DataLoader(train, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=1, pin_memory=True)
+    validation_loader = utils.DataLoader(val, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=1, pin_memory=True)
     return train_loader, validation_loader
 
 def train_loop(model, device, optimizer, scheduler, train_loader):
@@ -44,7 +44,7 @@ def train_loop(model, device, optimizer, scheduler, train_loader):
         images, labels = item['image'].to(device), item['label'].to(device)
 
         outputs = model(images)
-        loss = criterion(outputs, labels)
+        loss = criterion(outputs['logits'], labels)
 
         optimizer.zero_grad()
         loss.backward()
@@ -53,7 +53,7 @@ def train_loop(model, device, optimizer, scheduler, train_loader):
 
         with torch.no_grad():
             train_loss += float(loss)
-            num_correct += int(sum(torch.argmax(F.softmax(outputs, dim=1),dim=1) == labels))
+            num_correct += int(sum(outputs['argmax'] == labels))
             num_examples += len(labels)
 
     train_loss /= minibatch
@@ -73,8 +73,8 @@ def val_loop(model, device, scheduler, validation_loader):
             images, labels = item['image'].to(device), item['label'].to(device)
             outputs = model(images)
 
-            val_loss += criterion(outputs, labels).item()
-            num_correct += int(sum(torch.argmax(F.softmax(outputs, dim=1),dim=1) == labels))
+            val_loss += criterion(outputs['logits'], labels).item()
+            num_correct += int(sum(outputs['argmax'] == labels))
             num_examples += len(labels)
 
         val_loss /= minibatch
@@ -94,7 +94,7 @@ def train(model, device):
 
     train_loader, validation_loader = train_loaders()
 
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.1)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2)
     writer = SummaryWriter()
 
@@ -116,6 +116,7 @@ def train(model, device):
         if not os.path.isdir('saved_models'):
             os.makedirs('saved_models')
         model.module.save(os.path.join('saved_models', f'{epoch + 1}.pth'))
+    writer.close()
 
 def main():
     use_cuda = torch.cuda.is_available()

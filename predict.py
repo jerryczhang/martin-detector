@@ -6,7 +6,7 @@ from dataset import ImageDataset
 from model import MNet
 
 dir_test = 'images/data/test'
-batch_size = 50
+batch_size = 125
 
 def image_output(model, images):
     """Get predicted output on a single image"""
@@ -16,7 +16,7 @@ def image_output(model, images):
         dataset = ImageDataset()
         for image in images:
             dataset.append([image, 0, ''])
-        loader = utils.DataLoader(dataset, batch_size=1, num_workers=8, pin_memory=True)
+        loader = utils.DataLoader(dataset, batch_size=1, num_workers=1, pin_memory=True)
         for item in loader:
             image = item[0]
             output = model(image, output='argmax')
@@ -29,14 +29,14 @@ def test_eval(model, device):
     model.eval()
 
     dataset = ImageDataset(dir_test)
-    test_loader = utils.DataLoader(dataset, batch_size=batch_size, num_workers=8, pin_memory=True)
+    test_loader = utils.DataLoader(dataset, batch_size=batch_size, num_workers=1, pin_memory=True)
 
     num_correct = 0
     for item in test_loader:
-        images, labels = item[0].to(device), item[1].to(device)
+        images, labels = item['image'].to(device), item['label'].to(device)
 
-        outputs = model(images, output='argmax')
-        num_correct += int(sum(outputs == labels))
+        outputs = model(images)
+        num_correct += int(sum(outputs['argmax'] == labels))
 
     accuracy = num_correct / len(dataset)
     print(f'Accuracy on test set: {accuracy * 100}')
@@ -49,7 +49,7 @@ def main():
 
     net = MNet()
     net = nn.DataParallel(net).to(device)
-    net.module.load('saved_models/49.pth')
+    net.module.load('saved_models/20.pth')
     test_eval(net, device)
 
 if __name__ == '__main__':
