@@ -18,11 +18,11 @@ class ImageDataset(Dataset):
 
         if img_dir == None:
             return
-        for i,label in enumerate(os.listdir(img_dir)):
-            subdir = os.path.join(img_dir, label)
+        for label,name in enumerate(os.listdir(img_dir)):
+            subdir = os.path.join(img_dir, name)
             for image in glob(os.path.join(subdir, '**', '*'), recursive=True):
                 if os.path.isfile(image):
-                    self.items.append([image, i, label])
+                    self.items.append({'image':image, 'label':label, 'name':name})
 
         print(f'Created dataset with {len(self)} examples')
 
@@ -36,9 +36,10 @@ class ImageDataset(Dataset):
 
     def __getitem__(self, i):
         item = self.items[i]
-        pil_image = pil_open(item[0])
+        pil_image = pil_open(item['image'])
         image = self.preprocess(pil_image)
-        return [image, item[1], item[2]]
+        item['image'] = image
+        return item
 
     def __len__(self):
         return len(self.items)

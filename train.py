@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torchvision.transforms as transforms
 import torch.utils.data as utils
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 import os
 
 from dataset import ImageDataset
@@ -20,7 +21,7 @@ learning_rate = 1e-5
 shuffle_dataset = True
 input_size = 224
 
-def train_loaders(transform):
+def train_loaders():
     """Get the train and validation loaders"""
 
     dataset = ImageDataset(dir_train)
@@ -40,7 +41,7 @@ def train_loop(model, device, optimizer, scheduler, train_loader):
 
     model.train()
     for minibatch, item in enumerate(train_loader, 1):
-        images, labels = item[0].to(device), item[1].to(device)
+        images, labels = item['image'].to(device), item['label'].to(device)
 
         outputs = model(images)
         loss = criterion(outputs, labels)
@@ -69,7 +70,7 @@ def val_loop(model, device, scheduler, validation_loader):
     model.eval()
     with torch.no_grad():
         for minibatch, item in enumerate(validation_loader, 1):
-            images, labels = item[0].to(device), item[1].to(device)
+            images, labels = item['image'].to(device), item['label'].to(device)
             outputs = model(images)
 
             val_loss += criterion(outputs, labels).item()
@@ -91,37 +92,25 @@ def train(model, device):
     print(f'Validation split: {validation_split}')
     print(f'Initial learning rate: {learning_rate}')
 
-    train_losses = []
-    train_accuracies = []
-
-    val_losses = []
-    val_accuracies = []
-
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-    ])
-    train_loader, validation_loader = train_loaders(transform)
+    train_loader, validation_loader = train_loaders()
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.01)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2)
+    writer = SummaryWriter()
 
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs)):
 
         # Train
         train_loss, train_accuracy = train_loop(model, device, optimizer, scheduler, train_loader)
-        train_losses.append(train_loss)
-        train_accuracies.append(train_accuracy)
-        print(f'\nFinished {epoch + 1} epochs of training')
-        print(f'Average training loss: {train_loss}')
 
         # Validation
         val_loss, val_accuracy = val_loop(model, device, scheduler, validation_loader)
-        val_losses.append(val_loss)
-        val_accuracies.append(val_accuracy)
-        print(f'Validation loss: {val_loss}')
 
-        print(f'Train accuracy: {train_accuracies[epoch]}, Validation accuracy: {val_accuracies[epoch]}')
+        # Summary
+        writer.add_scalar('Loss/train', train_loss, epoch+1)
+        writer.add_scalar('Loss/val', val_loss, epoch+1)
+        writer.add_scalar('Accuracy/train', train_accuracy, epoch+1)
+        writer.add_scalar('Accuracy/val', val_accuracy, epoch+1)
 
         # Save model
         if not os.path.isdir('saved_models'):
