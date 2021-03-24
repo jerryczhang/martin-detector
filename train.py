@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data as utils
+from torchvision import transforms
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import os
@@ -11,12 +12,11 @@ from dataset import ImageDataset
 from model import MNet
 
 dir_train = 'images/data/train'
+dir_val = 'images/data/val'
 
-criterion = nn.CrossEntropyLoss()
 epochs = 100
 batch_size = 125
-validation_split = 0.2
-learning_rate = 1e-4
+learning_rate = 1e-5
 
 shuffle_dataset = True
 input_size = 224
@@ -24,15 +24,19 @@ input_size = 224
 def train_loaders():
     """Get the train and validation loaders"""
 
-    dataset = ImageDataset(dir_train)
-    n_val = int(len(dataset) * validation_split)
-    n_train = len(dataset) - n_val
-    train, val = utils.random_split(dataset, [n_train, n_val])
-    train_loader = utils.DataLoader(train, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=1, pin_memory=True)
-    validation_loader = utils.DataLoader(val, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=1, pin_memory=True)
+    train_augment = transforms.Compose([
+        transforms.ColorJitter(0.9, 0.9, 0.9, 0.2),
+        transforms.RandomAffine(degrees=10, shear=10),
+        transforms.GaussianBlur(5),
+        transforms.RandomPerspective()
+    ])
+    train_dataset = ImageDataset(img_dir=dir_train, augment=train_augment)
+    val_dataset = ImageDataset(img_dir=dir_val)
+    train_loader = utils.DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=1, pin_memory=True)
+    validation_loader = utils.DataLoader(val_dataset, batch_size=batch_size, shuffle=shuffle_dataset, num_workers=1, pin_memory=True)
     return train_loader, validation_loader
 
-def train_loop(model, device, optimizer, scheduler, train_loader):
+def train_loop(model, device, criterion, optimizer, scheduler, train_loader):
     """Execute one epoch of training"""
 
     train_loss = 0
@@ -60,7 +64,7 @@ def train_loop(model, device, optimizer, scheduler, train_loader):
     accuracy = num_correct / num_examples
     return train_loss, accuracy
 
-def val_loop(model, device, scheduler, validation_loader):
+def val_loop(model, device, criterion, scheduler, validation_loader):
     """Execute one epoch of validation"""
 
     val_loss = 0
@@ -89,22 +93,23 @@ def train(model, device):
 
     print('\nStarting training')
     print(f'Batch size: {batch_size}')
-    print(f'Validation split: {validation_split}')
     print(f'Initial learning rate: {learning_rate}')
 
     train_loader, validation_loader = train_loaders()
 
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.1)
+    train_weights = torch.Tensor([0.05,0.078,0.58,0.059,0.116,0.362,0.161,0.034,0.725]).to(device)
+    criterion = nn.CrossEntropyLoss(weight=train_weights)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.01)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2)
     writer = SummaryWriter()
 
     for epoch in tqdm(range(epochs)):
 
         # Train
-        train_loss, train_accuracy = train_loop(model, device, optimizer, scheduler, train_loader)
+        train_loss, train_accuracy = train_loop(model, device, criterion, optimizer, scheduler, train_loader)
 
         # Validation
-        val_loss, val_accuracy = val_loop(model, device, scheduler, validation_loader)
+        val_loss, val_accuracy = val_loop(model, device, criterion, scheduler, validation_loader)
 
         # Summary
         writer.add_scalar('Loss/train', train_loss, epoch+1)

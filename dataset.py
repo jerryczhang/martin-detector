@@ -8,12 +8,13 @@ from torchvision import transforms
 from utils import *
 
 class ImageDataset(Dataset):
-    def __init__(self, img_dir=None):
+    def __init__(self, augment=None, img_dir=None):
         self.img_dir = img_dir
         self.normalize = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
+        self.augment = augment
         self.items = []
 
         if img_dir == None:
@@ -28,8 +29,9 @@ class ImageDataset(Dataset):
 
     def preprocess(self, pil_image, size=(224,224)):
         pil_image = pil_image.resize(size).convert('RGB')
-        image_array = np.array(pil_image)
-        image_array = self.normalize(image_array)
+        if self.augment:
+            image_array = self.augment(pil_image)
+        image_array = self.normalize(pil_image)
         if image_array.max() > 1:
             image_array = image_array / 255
         return image_array
