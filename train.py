@@ -25,10 +25,10 @@ def train_loaders():
     """Get the train and validation loaders"""
 
     train_augment = transforms.Compose([
-        transforms.ColorJitter(0.9, 0.9, 0.9, 0.2),
-        transforms.RandomAffine(degrees=10, shear=10),
+        transforms.ColorJitter(0.5, 0.5, 0.5),
+        transforms.RandomAffine(degrees=10),
         transforms.GaussianBlur(5),
-        transforms.RandomPerspective()
+        transforms.RandomPerspective(distortion_scale=0.2)
     ])
     train_dataset = ImageDataset(img_dir=dir_train, augment=train_augment)
     val_dataset = ImageDataset(img_dir=dir_val)
@@ -97,8 +97,7 @@ def train(model, device):
 
     train_loader, validation_loader = train_loaders()
 
-    train_weights = torch.Tensor([0.05,0.078,0.58,0.059,0.116,0.362,0.161,0.034,0.725]).to(device)
-    criterion = nn.CrossEntropyLoss(weight=train_weights)
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.01)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2)
     writer = SummaryWriter()

@@ -28,7 +28,7 @@ def test_eval(model, device):
     print('\nStarting evaluation on test set')
     model.eval()
 
-    dataset = ImageDataset(dir_test)
+    dataset = ImageDataset(img_dir=dir_test)
     test_loader = utils.DataLoader(dataset, batch_size=batch_size, num_workers=1, pin_memory=True)
 
     num_correct = 0
@@ -49,7 +49,7 @@ def main():
 
     net = MNet()
     net = nn.DataParallel(net).to(device)
-    net.module.load('saved_models/20.pth')
+    net.module.load('saved_models/35.pth')
     test_eval(net, device)
 
 if __name__ == '__main__':

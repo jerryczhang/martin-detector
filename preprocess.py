@@ -1,38 +1,72 @@
 import argparse
-import Augmentor
+from glob import glob
 import numpy as np
 import os
+from PIL import Image
+import random
 import shutil
 import torch
+from torchvision import transforms
+from tqdm import tqdm
 
 def get_args():
     parser = argparse.ArgumentParser(description='Perform various pre-processing tasks',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-a', '--augment', type=int, default=0, help='Perform augments on the data', dest='augment')
     parser.add_argument('-c', '--count', action='store_const', const=count, default=None, help='Count files in directories', dest='count')
+    parser.add_argument('-v', '--visualize', action='store_const', const=augment_vis, default=None, help='Visualize results of augmentation', dest='augment_vis')
     parser.add_argument('-d', '--directory', type=str, help='The directory to perform the operation', dest='dir')
     return parser.parse_args()
 
 def augment(size, dir):
     assert dir != None, 'Augment requires directory argument'
     labels = [label for label in os.listdir(dir)]
+
+    train_augment = transforms.Compose([
+        transforms.ColorJitter(0.5, 0.5, 0.5),
+        transforms.RandomAffine(degrees=10),
+        transforms.GaussianBlur(5),
+        transforms.RandomPerspective(distortion_scale=0.2)
+    ])
+
     for label in labels:
-        current_dir = os.path.join(dir, label)
-        output = os.path.join(current_dir, 'output')
+        subdir = os.path.join(dir, label)
+        output = os.path.join(subdir, 'augmented')
         if os.path.isdir(output):
             shutil.rmtree(output)
 
-        num_images = len([file for file in os.listdir(current_dir) if os.path.isfile(os.path.join(current_dir, file))])
+        images = glob(os.path.join(subdir, '*'))
+        num_images = len(images)
         if num_images >= size:
+            print(f'\'{subdir}\' already has enough images ({num_images})')
             continue
 
-        p = Augmentor.Pipeline(current_dir)
-        p.rotate(probability=0.8, max_left_rotation=20, max_right_rotation=20)
-        p.random_brightness(probability=0.8, min_factor=0.4, max_factor=1.6)
-        p.random_contrast(probability=0.8, min_factor=0.4, max_factor=1.6)
-        p.random_color(probability=0.8, min_factor=0.4, max_factor=1.6)
+        os.makedirs(output)
+        for i in tqdm(range(size - num_images)):
+            img_name = random.choice(images)
+            image = Image.open(img_name)
+            transformed = train_augment(image)
+            transformed = transformed.resize((224, 224))
+            transformed.save(os.path.join(output, f'{i}_{img_name.split(os.sep)[-1]}'))
 
-        p.sample(size - num_images)
+def augment_vis(dir):
+    assert dir != None, 'Augmentation visualization requires directory argument'
+    output = os.path.join(dir, 'test')
+    if not os.path.isdir(output):
+        os.makedirs(output)
+    train_augment = transforms.Compose([
+        transforms.ColorJitter(0.5, 0.5, 0.5),
+        transforms.RandomAffine(degrees=10),
+        transforms.GaussianBlur(5),
+        transforms.RandomPerspective(distortion_scale=0.2)
+    ])
+    images = glob(os.path.join(dir, '*'))
+    for i in range(20):
+        img_name = random.choice(images)
+        image = Image.open(img_name)
+        transformed = train_augment(image)
+        transformed.save(os.path.join(output, img_name.split(os.sep)[-1]))
+
 
 def count(dir):
     assert dir != None, 'Count requires directory argument'
@@ -55,3 +89,5 @@ if __name__ == '__main__':
         augment(args.augment, args.dir)
     if args.count:
         args.count(args.dir)
+    if args.augment_vis:
+        args.augment_vis(args.dir)
